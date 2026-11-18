@@ -1,0 +1,406 @@
+// Prisma schema for Calisthenics Power
+// Документация: /docs/TZ.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ====== Профиль атлета ======
+model AthleteProfile {
+  id                 String   @id @default("default")
+  name               String?
+  birthDate          DateTime?
+  gender             String?  // MALE | FEMALE | OTHER
+  heightCm           Int?
+  weightKg           Float?
+  armLengthCm        Float?
+  torsoLengthCm      Float?
+  legLengthCm        Float?
+  maxPullups         Int?
+  maxPushups         Int?
+  maxDips            Int?
+  maxSquats          Int?
+  maxPlankSec        Int?
+  primaryVector      String?  // REPS | STATIC | CUT
+  lastSleepHours     Float?
+  lastMood           Int?
+  lastSoreness       Int?
+  lastStressIndex    Float?
+  lastStressUpdated  DateTime?
+  language           String   @default("ru")
+  theme              String   @default("system")
+  ttsEnabled         Boolean  @default(true)
+  voiceControl       Boolean  @default(false)
+  showPresets        Boolean  @default(true)
+  aiProvider         String   @default("zai")
+  aiCustomUrl        String?
+  aiModel            String?
+  // Phase 3: Menstrual cycle tracking (for female athletes)
+  menstrualPhase     String?  // MENSTRUAL | FOLLICULAR | OVULATION | LUTEAL
+  menstrualCycleDay  Int?     // 1-28+ (day of cycle)
+  lastMenstrualDate  DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("athlete_profile")
+}
+
+// ====== Травмы ======
+model Injury {
+  id        String   @id @default(cuid())
+  bodyPart  String   // LEFT_ELBOW | RIGHT_SHOULDER | ...
+  type      String
+  severity  Int      // 1-5
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("injury")
+}
+
+// ====== Упражнения (предзаполненные, seed) ======
+model Exercise {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  nameRu          String
+  nameEn          String
+  descriptionRu   String
+  descriptionEn   String
+  howToRu         String
+  howToEn         String
+  type            String   // PULL | PUSH | CORE | LEGS | STATIC | MOBILITY
+  equipment       String   // JSON массив
+  levelBase       String   // BEGINNER | INTERMEDIATE | ADVANCED
+  levelSub        Int      // 1-3
+  vectors         String   // JSON массив
+  loadCoef        Int      // 1-9
+  targetMusclesRu String   // JSON массив
+  targetMusclesEn String   // JSON массив
+  illustrationUrl String?
+  scienceRu       String?
+  scienceEn       String?
+  sources         String?  // JSON массив
+  alternatives    String   // JSON массив slug'ов
+  // Compound-эффективность (опционально для совместимости со старым seed'ом)
+  compoundScore   Int?
+  muscleGroupsCount Int?
+  compoundType    String?  // FULL_BODY | UPPER_BODY | LOWER_BODY | CORE | CARDIO | ISOLATION
+  isCompound      Boolean?
+  createdAt       DateTime @default(now())
+
+  @@map("exercise")
+}
+
+// ====== Техники ======
+model Technique {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  nameRu        String
+  nameEn        String
+  category      String   // CNS | MENTAL | RELAX | WARMUP | COOLDOWN
+  descriptionRu String
+  descriptionEn String
+  whenToApplyRu String
+  whenToApplyEn String
+  stepsRu       String   // JSON массив строк
+  stepsEn       String   // JSON массив строк
+  scienceRu     String?
+  scienceEn     String?
+  level         String   // BEGINNER | INTERMEDIATE | ADVANCED
+  durationMin   Int?
+  createdAt     DateTime @default(now())
+
+  @@map("technique")
+}
+
+// ====== Теория ======
+model TheoryArticle {
+  id         String   @id @default(cuid())
+  slug       String   @unique
+  category   String
+  titleRu    String
+  titleEn    String
+  contentRu  String
+  contentEn  String
+  sources    String?  // JSON массив
+  order      Int
+  createdAt  DateTime @default(now())
+
+  @@map("theory_article")
+}
+
+// ====== Избранное в теории ======
+model TheoryFavorite {
+  id        String   @id @default(cuid())
+  slug      String   @unique // slug статьи TheoryArticle
+  createdAt DateTime @default(now())
+
+  @@map("theory_favorite")
+}
+
+// ====== Шаблоны тренировок ======
+model WorkoutTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  format      String   // AMRAP | EMOM | TABATA | INTERVAL
+  durationSec Int?
+  rounds      Int?
+  restSec     Int?
+  workSec     Int?
+  items       String   // JSON массив WorkoutItem
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("workout_template")
+}
+
+// ====== Сессии тренировок (история) ======
+model WorkoutSession {
+  id            String   @id @default(cuid())
+  templateId    String?
+  format        String   // AMRAP | EMOM | TABATA | INTERVAL
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+  durationSec   Int      @default(0)
+  totalRounds   Int      @default(0)
+  totalReps     Int      @default(0)
+  totalVolume   Float    @default(0)
+  substitutions String?  // JSON массив SubstitutionRecord
+  avgHr         Int?
+  maxHr         Int?
+  notes         String?
+  feelingRating Int?     // 1-10
+  items         String   // JSON массив WorkoutSessionItem
+  // Phase 3: Diary — tags (JSON массив строк) + source происхождения записи
+  tags          String?  // JSON массив строк, например ["heavy","light","pre-illness"]
+  source        String   @default("manual") // manual | csv | import
+
+  @@map("workout_session")
+}
+
+// ====== Чат с ИИ ======
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String   // USER | ASSISTANT | SYSTEM
+  content   String
+  createdAt DateTime @default(now())
+
+  @@map("chat_message")
+}
+
+// ====== Трекер боли/состояния ======
+model PainLog {
+  id              String   @id @default(cuid())
+  bodyPart        String   // LEFT_ELBOW | RIGHT_SHOULDER | LOWER_BACK | etc.
+  intensity       Int      // 1-10
+  type            String?  // текстовое описание (тянущая, острая, ноющая)
+  notes           String?
+  relatedSessionId String? // связь с тренировкой (опционально)
+  date            DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@map("pain_log")
+}
+
+// ====== Тренировочный календарь ======
+model PlannedWorkout {
+  id          String   @id @default(cuid())
+  date        DateTime
+  title       String
+  format      String   @default("AMRAP") // AMRAP | EMOM | TABATA | INTERVAL | CUSTOM
+  durationMin Int      @default(30)
+  notes       String?
+  completed   Boolean  @default(false)
+  sessionId   String?  // связь с выполненной WorkoutSession
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("planned_workout")
+}
+
+// ====== Трекер сна/HRV ======
+model SleepLog {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  sleepHours  Float    // 0-12
+  sleepQuality Int     // 1-10
+  hrv         Int?     // ms (RMSSD)
+  rhr         Int?     // resting heart rate
+  bedTime     String?  // HH:MM
+  wakeTime    String?  // HH:MM
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@map("sleep_log")
+}
+
+// ====== Социальный слой — площадки ======
+model WorkoutSpot {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  lat         Float
+  lng         Float
+  address     String?
+  hasBar       Boolean @default(false)
+  hasDips      Boolean @default(false)
+  hasParallettes Boolean @default(false)
+  hasRings     Boolean @default(false)
+  hasWall      Boolean @default(false)
+  rating      Int      @default(3)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("workout_spot")
+}
+
+// ====== Статические элементы (справочник, seed) ======
+model StaticElement {
+  id          String   @id @default(cuid())
+  slug        String   @unique // planche | front-lever | l-sit | handstand
+  nameRu      String
+  nameEn      String
+  descriptionRu String
+  descriptionEn String
+  icon        String
+  steps       String   // JSON массив ProgressionStep
+  createdAt   DateTime @default(now())
+
+  @@map("static_element")
+}
+
+// ====== Состояние прогрессии пользователя ======
+model ProgressionState {
+  id           String   @id @default(cuid())
+  elementSlug  String   // planche | front-lever | l-sit | handstand
+  currentStep  Int      @default(1) // 1-based
+  bestHoldSec  Int      @default(0)
+  bestHoldDate DateTime?
+  passedSteps  String   @default("[]") // JSON массив order'ов
+  notes        String?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@unique([elementSlug])
+  @@map("progression_state")
+}
+
+// ====== Дерево навыков RPG (Phase 3) — справочник, seed ======
+model SkillNode {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  exerciseSlug    String?
+  nameRu          String
+  nameEn          String
+  descriptionRu   String
+  descriptionEn   String
+  branch          String   // PULL | PUSH | CORE | LEGS | STATIC | EXPLOSIVE | MOBILITY
+  type            String   // FOUNDATIONAL | MAIN | PASSIVE | ELITE | MILESTONE
+  order           Int
+  gateSec         Int?
+  gateReps        Int?
+  gateNotesRu     String?
+  gateNotesEn     String?
+  prerequisites   String   @default("[]") // JSON массив slug'ов
+  unlocksPassive  String?  // JSON массив slug'ов
+  x               Float
+  y               Float
+  loadCoef        Int
+  isElite         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@map("skill_node")
+}
+
+// ====== Состояние навыка пользователя (Phase 3) ======
+model UserSkillState {
+  id           String   @id @default(cuid())
+  skillSlug    String   @unique
+  isUnlocked   Boolean  @default(false)
+  unlockedAt   DateTime?
+  bestResult   String?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@map("user_skill_state")
+}
+
+// ====== Цели пользователя (Phase 3) ======
+model Goal {
+  id                String   @id @default(cuid())
+  title             String
+  description       String?
+  type              String   // ELEMENT | REPS | WEIGHT | HABIT | CUSTOM
+  status            String   @default("active") // ACTIVE | COMPLETED | PAUSED | ABANDONED
+  targetValue       Float?
+  targetUnit        String?
+  currentValue      Float    @default(0)
+  startDate         DateTime @default(now())
+  targetDate        DateTime?
+  completedAt       DateTime?
+  staticElementSlug String?
+  skillNodeSlug     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("goal")
+}
+
+// ====== Проблемные зоны (справочник, seed) ======
+model ProblemArea {
+  id                        String   @id @default(cuid())
+  slug                      String   @unique
+  nameRu                    String
+  nameEn                    String
+  descriptionRu             String
+  descriptionEn             String
+  category                  String
+  causesRu                  String   // JSON массив
+  causesEn                  String   // JSON массив
+  solutionsRu               String   // JSON массив
+  solutionsEn               String   // JSON массив
+  recommendedExerciseSlugs  String   // JSON массив
+  recommendedTechniqueSlugs String  // JSON массив
+  nutritionTipsRu           String?
+  nutritionTipsEn           String?
+  whenToSeeDoctorRu         String
+  whenToSeeDoctorEn         String
+  relatedInjuryBodyParts    String   @default("[]") // JSON массив
+  createdAt                 DateTime @default(now())
+
+  @@map("problem_area")
+}
+
+// ====== БАДы и добавки (справочник, seed) ======
+model Supplement {
+  id                    String   @id @default(cuid())
+  slug                  String   @unique
+  nameRu                String
+  nameEn                String
+  category              String   // STRENGTH | RECOVERY | JOINTS | ENERGY | SLEEP | VITAMINS
+  descriptionRu         String
+  descriptionEn         String
+  dosageRu              String
+  dosageEn              String
+  timingRu              String
+  timingEn              String
+  efficacy              String   // VALIDATED | MIXED | INEFFECTIVE
+  efficacyNotesRu       String
+  efficacyNotesEn       String
+  sideEffectsRu         String
+  sideEffectsEn         String
+  contraindicationsRu   String
+  contraindicationsEn   String
+  sources               String   // JSON массив
+  recommendedForGoals   String   @default("[]") // JSON массив
+  createdAt             DateTime @default(now())
+
+  @@map("supplement")
+}
